@@ -1,18 +1,47 @@
+import { db } from '../db';
+import { categoriesTable } from '../db/schema';
 import { type UpdateCategoryInput, type Category } from '../schema';
+import { eq } from 'drizzle-orm';
 
-export async function updateCategory(input: UpdateCategoryInput): Promise<Category> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is updating an existing category.
-    // It should:
-    // 1. Verify category exists and belongs to user
-    // 2. Update category fields in database
-    // 3. Return the updated category
-    return Promise.resolve({
-        id: input.id,
-        user_id: 1, // Should be retrieved from database
-        name: input.name || 'Category Name',
-        color: input.color || null,
-        icon: input.icon || null,
-        created_at: new Date()
-    } as Category);
-}
+export const updateCategory = async (input: UpdateCategoryInput): Promise<Category> => {
+  try {
+    // First verify category exists
+    const existingCategory = await db.select()
+      .from(categoriesTable)
+      .where(eq(categoriesTable.id, input.id))
+      .execute();
+
+    if (existingCategory.length === 0) {
+      throw new Error(`Category with id ${input.id} not found`);
+    }
+
+    // Build update object with only provided fields
+    const updateData: any = {};
+    if (input.name !== undefined) {
+      updateData.name = input.name;
+    }
+    if (input.color !== undefined) {
+      updateData.color = input.color;
+    }
+    if (input.icon !== undefined) {
+      updateData.icon = input.icon;
+    }
+
+    // If no fields to update, return existing category
+    if (Object.keys(updateData).length === 0) {
+      return existingCategory[0];
+    }
+
+    // Update category in database
+    const result = await db.update(categoriesTable)
+      .set(updateData)
+      .where(eq(categoriesTable.id, input.id))
+      .returning()
+      .execute();
+
+    return result[0];
+  } catch (error) {
+    console.error('Category update failed:', error);
+    throw error;
+  }
+};

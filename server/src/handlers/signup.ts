@@ -1,20 +1,49 @@
+import { db } from '../db';
+import { usersTable } from '../db/schema';
 import { type SignupInput, type User } from '../schema';
+import { eq } from 'drizzle-orm';
+import { createHash } from 'crypto';
 
-export async function signup(input: SignupInput): Promise<User> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is creating a new user account with hashed password.
-    // It should:
-    // 1. Check if email already exists
-    // 2. Hash the password using bcrypt or similar
-    // 3. Create user record in database
-    // 4. Return the created user (without password_hash)
-    return Promise.resolve({
-        id: 0, // Placeholder ID
+export const signup = async (input: SignupInput): Promise<User> => {
+  try {
+    // Check if email already exists
+    const existingUsers = await db.select()
+      .from(usersTable)
+      .where(eq(usersTable.email, input.email))
+      .execute();
+
+    if (existingUsers.length > 0) {
+      throw new Error('Email already exists');
+    }
+
+    // Hash the password with salt
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
+    const password_hash = createHash('sha256').update(input.password + saltHex).digest('hex') + ':' + saltHex;
+
+    // Create user record
+    const result = await db.insert(usersTable)
+      .values({
         email: input.email,
-        password_hash: '', // This should be hashed password
+        password_hash,
         first_name: input.first_name,
-        last_name: input.last_name,
-        created_at: new Date(),
-        updated_at: new Date()
-    } as User);
-}
+        last_name: input.last_name
+      })
+      .returning()
+      .execute();
+
+    const user = result[0];
+    return {
+      id: user.id,
+      email: user.email,
+      password_hash: user.password_hash,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      created_at: user.created_at,
+      updated_at: user.updated_at
+    };
+  } catch (error) {
+    console.error('User signup failed:', error);
+    throw error;
+  }
+};

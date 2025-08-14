@@ -1,18 +1,34 @@
+import { db } from '../db';
+import { categoriesTable, usersTable } from '../db/schema';
 import { type CreateCategoryInput, type Category } from '../schema';
+import { eq } from 'drizzle-orm';
 
-export async function createCategory(input: CreateCategoryInput): Promise<Category> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is creating a new expense/income category for a user.
-    // It should:
-    // 1. Validate user exists
-    // 2. Create category record in database
-    // 3. Return the created category
-    return Promise.resolve({
-        id: 0, // Placeholder ID
+export const createCategory = async (input: CreateCategoryInput): Promise<Category> => {
+  try {
+    // Validate user exists
+    const user = await db.select()
+      .from(usersTable)
+      .where(eq(usersTable.id, input.user_id))
+      .execute();
+
+    if (user.length === 0) {
+      throw new Error(`User with ID ${input.user_id} not found`);
+    }
+
+    // Insert category record
+    const result = await db.insert(categoriesTable)
+      .values({
         user_id: input.user_id,
         name: input.name,
-        color: input.color || null,
-        icon: input.icon || null,
-        created_at: new Date()
-    } as Category);
-}
+        color: input.color,
+        icon: input.icon
+      })
+      .returning()
+      .execute();
+
+    return result[0];
+  } catch (error) {
+    console.error('Category creation failed:', error);
+    throw error;
+  }
+};

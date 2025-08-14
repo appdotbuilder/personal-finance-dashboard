@@ -1,10 +1,39 @@
+import { db } from '../db';
+import { categoriesTable, transactionsTable } from '../db/schema';
+import { eq, and, isNull } from 'drizzle-orm';
+
 export async function deleteCategory(categoryId: number, userId: number): Promise<{ success: boolean }> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is deleting a category.
-    // It should:
-    // 1. Verify category exists and belongs to user
-    // 2. Handle transactions that reference this category (set to null)
-    // 3. Delete category from database
-    // 4. Return success status
-    return Promise.resolve({ success: true });
+  try {
+    // First, verify category exists and belongs to user
+    const existingCategory = await db.select()
+      .from(categoriesTable)
+      .where(and(
+        eq(categoriesTable.id, categoryId),
+        eq(categoriesTable.user_id, userId)
+      ))
+      .execute();
+
+    if (existingCategory.length === 0) {
+      throw new Error('Category not found or does not belong to user');
+    }
+
+    // Update all transactions that reference this category to set category_id to null
+    await db.update(transactionsTable)
+      .set({ category_id: null })
+      .where(eq(transactionsTable.category_id, categoryId))
+      .execute();
+
+    // Delete the category
+    await db.delete(categoriesTable)
+      .where(and(
+        eq(categoriesTable.id, categoryId),
+        eq(categoriesTable.user_id, userId)
+      ))
+      .execute();
+
+    return { success: true };
+  } catch (error) {
+    console.error('Category deletion failed:', error);
+    throw error;
+  }
 }
